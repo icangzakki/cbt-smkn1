@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ujian Siswa - CBT SMKN 1 Banjarmasin</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; -webkit-user-select: none; user-select: none; }
         .hide { display: none !important; }
@@ -25,7 +27,7 @@
         </div>
     </div>
 
-    <div class="max-w-4xl mx-auto space-y-6 pb-10">
+    <div class="max-w-4xl mx-auto space-y-6 pb-4">
         
         <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6 mb-6">
             <div class="flex items-center gap-4">
@@ -35,7 +37,9 @@
                     <p class="text-sm md:text-base text-slate-500">SMKN 1 Banjarmasin</p>
                 </div>
             </div>
-            <div id="syncStatus" class="hide bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full font-bold text-sm">Terkoneksi</div>
+            <div class="flex items-center gap-3">
+                <div id="syncStatus" class="hide bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full font-bold text-sm">Terkoneksi</div>
+            </div>
         </header>
 
         <div id="nisCard" class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
@@ -43,7 +47,7 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div class="md:col-span-2">
                     <label class="block text-sm font-semibold text-slate-700 mb-2">Nomor Induk Siswa (NIS)</label>
-                    <input type="text" id="nisInput" placeholder="Masukkan NIS Anda di sini..." class="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none text-lg font-semibold">
+                    <input type="text" id="nisInput" placeholder="Masukkan NIS Anda di sini..." class="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none text-lg font-semibold text-center md:text-left">
                 </div>
                 <button onclick="cekNIS()" id="btnCariSiswa" class="bg-blue-600 text-white rounded-xl px-6 py-3.5 font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-600/30">Cek Data Siswa</button>
             </div>
@@ -105,6 +109,10 @@
 
     </div>
 
+    <div class="text-center mt-12 pb-6">
+        <span onclick="bukaPintuRahasia()" class="text-xs text-slate-300 hover:text-slate-400 cursor-pointer select-none transition">v.3.1.0</span>
+    </div>
+
     <script>
         // Inisialisasi Supabase
         const sbUrl = 'https://lntfulglflqoatahvwjd.supabase.co';
@@ -158,7 +166,7 @@
             const inputEl = document.getElementById('nisInput');
             const btnEl = document.getElementById('btnCariSiswa');
             
-            if (!inputEl) { alert("Error: HTML belum termuat sempurna."); return; }
+            if (!inputEl) { alert("Error HTML."); return; }
 
             const nis = inputEl.value.trim();
             if(!nis) { showStudentModal("Peringatan", "NIS tidak boleh kosong!", "error"); return; }
@@ -167,10 +175,10 @@
             btnEl.disabled = true;
 
             try {
-                console.log("Cari NIS:", nis);
+                console.log("Mencari data siswa dengan NIS:", nis);
                 const { data: siswa, error: errSiswa } = await sb.from('data_siswa').select('*').eq('nis', nis).single();
                 
-                if (errSiswa || !siswa) throw new Error("Nomor Induk Siswa (NIS) tidak terdaftar.");
+                if (errSiswa || !siswa) throw new Error("Nomor Induk Siswa (NIS) tidak terdaftar di sistem.");
                 
                 dataSiswaAktif = siswa;
                 
@@ -184,7 +192,7 @@
                 btnEl.classList.add('hide');
 
             } catch (error) {
-                console.error("Error Cek NIS:", error);
+                console.error("Error Database:", error);
                 showStudentModal("Data Tidak Ditemukan", error.message, "error");
                 btnEl.textContent = "Cek Data Siswa"; 
                 btnEl.disabled = false;
@@ -208,7 +216,6 @@
             try {
                 const hariIni = new Date().toISOString().split('T')[0];
 
-                // Cari jadwal sesuai tanggal, jurusan, dan kelas
                 const { data: jadwal, error: errJadwal } = await sb.from('jadwal_ujian')
                     .select('*, bank_soal(*)')
                     .eq('tanggal', hariIni)
@@ -216,13 +223,12 @@
                     .contains('kelas', [dataSiswaAktif.kelas]);
 
                 if (errJadwal || !jadwal || jadwal.length === 0) {
-                    throw new Error(`Belum ada jadwal ujian yang dirilis untuk Jurusan <b>${dataSiswaAktif.jurusan}</b> Kelas <b>${dataSiswaAktif.kelas}</b> pada hari ini.`);
+                    throw new Error(`Belum ada jadwal ujian untuk Jurusan <b>${dataSiswaAktif.jurusan}</b> Kelas <b>${dataSiswaAktif.kelas}</b> pada hari ini.`);
                 }
                 
                 jadwalAktif = jadwal[0];
                 bankSoal = jadwalAktif.bank_soal.soal; 
 
-                // Tampilkan info jadwal
                 document.getElementById('scheduleMapel').textContent = jadwalAktif.nama_mapel;
                 document.getElementById('scheduleGuru').textContent = jadwalAktif.nama_pengajar || '-';
                 document.getElementById('scheduleTanggal').textContent = jadwalAktif.tanggal;
@@ -230,13 +236,12 @@
 
                 document.getElementById('scheduleCard').classList.remove('hide');
 
-                // Jalankan timer pengecekan waktu
                 timerCekWaktu = setInterval(updateStatusTombolMulai, 1000);
                 updateStatusTombolMulai(); 
 
             } catch (error) {
                 showStudentModal("Informasi Jadwal", error.message, "info");
-                batalLogin(); // Kembali ke input awal
+                batalLogin(); 
             }
         }
 
@@ -268,12 +273,11 @@
 
         // --- ALUR 4: MASUK KE AREA UJIAN ---
         async function masukKeUjian() {
-            clearInterval(timerCekWaktu); // Hentikan deteksi waktu agar tidak memberatkan browser
+            clearInterval(timerCekWaktu); 
             const btn = document.getElementById('btnStartExam');
             btn.textContent = "MEMPERSIAPKAN SOAL...";
             
             try {
-                // Daftarkan siswa ke tabel hasil_ujian (jika belum)
                 const { error: errHasil } = await sb.from('hasil_ujian').upsert({
                     id_jadwal: jadwalAktif.id,
                     nis_siswa: dataSiswaAktif.nis,
@@ -282,18 +286,16 @@
                     nama_mapel: jadwalAktif.nama_mapel
                 }, { onConflict: 'id_jadwal, nis_siswa', ignoreDuplicates: true });
 
-                if (errHasil) throw new Error("Gagal menginisialisasi sesi database ujian.");
+                if (errHasil) throw new Error("Gagal menginisialisasi sesi ujian di database.");
 
-                // Transisi Tampilan UI
                 document.getElementById('nisCard').classList.add('hide');
                 document.getElementById('scheduleCard').classList.add('hide');
-                document.getElementById('syncStatus').classList.remove('hide'); // Munculkan indikator simpan
+                document.getElementById('syncStatus').classList.remove('hide'); 
                 
                 document.getElementById('examMapelTitle').textContent = jadwalAktif.nama_mapel;
                 document.getElementById('examStudentInfo').textContent = `${dataSiswaAktif.nama} — ${dataSiswaAktif.kelas}`;
                 
-                // Minta mode fullscreen (akan diabaikan otomatis jika di hp yang tidak support)
-                document.documentElement.requestFullscreen().catch(() => { console.log("Fullscreen diblokir browser"); });
+                document.documentElement.requestFullscreen().catch(() => {});
                 
                 document.getElementById('examCard').classList.remove('hide');
                 tampilkanSoal(0);
@@ -306,7 +308,6 @@
 
         // --- ALUR 5: NAVIGASI SOAL & SIMPAN JAWABAN ---
         function tampilkanSoal(index) {
-            // Cegah index di luar batas
             if (index < 0 || index >= bankSoal.length) return;
             indexSoal = index;
             const soalCurrent = bankSoal[index];
@@ -314,27 +315,21 @@
             document.getElementById('nomorSoalDisplay').textContent = index + 1;
             document.getElementById('teksSoal').textContent = soalCurrent.text || soalCurrent.soal;
 
-            // Logika Tombol Selesai vs Selanjutnya
             const btnNext = document.getElementById('btnNextSelesai');
             if (index === bankSoal.length - 1) {
-                // Berada di soal terakhir
                 btnNext.textContent = "SELESAI UJIAN";
                 btnNext.className = "px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition";
                 btnNext.onclick = () => konfirmasiSelesai();
             } else {
-                // Belum soal terakhir
                 btnNext.textContent = "Selanjutnya";
                 btnNext.className = "px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/30 transition";
                 btnNext.onclick = () => gantiSoal(1);
             }
 
-            // Render Opsi A, B, C, D
             let htmlOpsi = '';
             soalCurrent.opsi.forEach((teksPilihan, i) => {
-                const huruf = String.fromCharCode(65 + i); // Mengubah 0 jadi A, 1 jadi B, dst.
+                const huruf = String.fromCharCode(65 + i); 
                 const isChecked = jawabanSiswa[index] === huruf ? 'checked' : '';
-                
-                // Jika sedang dicentang, background jadi biru muda
                 const activeClass = isChecked ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-200' : 'bg-slate-50 border-slate-200 hover:border-blue-300 hover:bg-white';
                 
                 htmlOpsi += `
@@ -347,19 +342,16 @@
             document.getElementById('opsiJawaban').innerHTML = htmlOpsi;
         }
 
-        function gantiSoal(arah) {
-            tampilkanSoal(indexSoal + arah);
-        }
+        function gantiSoal(arah) { tampilkanSoal(indexSoal + arah); }
 
         async function simpanJawaban(index, jawaban) {
             jawabanSiswa[index] = jawaban;
-            tampilkanSoal(index); // Refresh UI (agar warna background opsi berubah)
+            tampilkanSoal(index); 
 
             const sync = document.getElementById('syncStatus');
             sync.innerHTML = "⏳ Menyimpan..."; 
             sync.className = "text-yellow-700 bg-yellow-100 px-4 py-2 rounded-full font-bold text-sm block";
 
-            // Update ke Supabase
             await sb.from('hasil_ujian')
                 .update({ detail_jawaban: jawabanSiswa })
                 .eq('id_jadwal', jadwalAktif.id)
@@ -372,62 +364,41 @@
         // --- ALUR 6: SELESAI UJIAN & NILAI ---
         function konfirmasiSelesai() {
             let terjawab = Object.keys(jawabanSiswa).length;
-            showStudentModal(
-                "Selesaikan Ujian?", 
-                `Anda telah menjawab <b>${terjawab}</b> dari <b>${bankSoal.length}</b> soal.<br>Anda tidak dapat mengubah jawaban lagi setelah ini.`, 
-                "info", 
-                true, 
-                selesaikanDanKirim
-            );
+            showStudentModal("Selesaikan Ujian?", `Anda telah menjawab <b>${terjawab}</b> dari <b>${bankSoal.length}</b> soal.<br>Jawaban tidak dapat diubah lagi setelah ini.`, "info", true, selesaikanDanKirim);
         }
 
         async function selesaikanDanKirim() {
-            // Tampilkan loading saat menghitung nilai
-            document.getElementById('modalButtons').innerHTML = '<p class="font-bold text-blue-600 animate-pulse">Menghitung Nilai & Menyimpan Data...</p>'; 
+            document.getElementById('modalButtons').innerHTML = '<p class="font-bold text-blue-600 animate-pulse">Menghitung Nilai & Menyimpan...</p>'; 
             
-            // Hitung Skor
             let benar = 0;
-            bankSoal.forEach((soal, i) => { 
-                if(jawabanSiswa[i] === soal.jawaban) benar++; 
-            });
+            bankSoal.forEach((soal, i) => { if(jawabanSiswa[i] === soal.jawaban) benar++; });
             let skorAkhir = Math.round((benar / bankSoal.length) * 100);
 
-            // Simpan status final ke Supabase
             await sb.from('hasil_ujian')
-                .update({ 
-                    is_selesai: true, 
-                    nilai_akhir: isNaN(skorAkhir) ? 0 : skorAkhir, 
-                    cheat_count: cheatCount 
-                })
-                .eq('id_jadwal', jadwalAktif.id)
-                .eq('nis_siswa', dataSiswaAktif.nis);
+                .update({ is_selesai: true, nilai_akhir: isNaN(skorAkhir) ? 0 : skorAkhir, cheat_count: cheatCount })
+                .eq('id_jadwal', jadwalAktif.id).eq('nis_siswa', dataSiswaAktif.nis);
 
-            // Tampilkan skor besar
-            const pesanNilai = `
-                <div class="text-center">
-                    <p class="text-slate-600 mb-2">Ujian telah selesai. Skor Anda adalah:</p>
-                    <div class="text-6xl font-black text-blue-700 mb-4">${skorAkhir}</div>
-                    <p class="text-sm text-slate-500">Nilai sudah terekam di sistem sekolah.</p>
-                </div>`;
-            
+            const pesanNilai = `<div class="text-center"><p class="text-slate-600 mb-2">Ujian selesai. Skor Anda:</p><div class="text-6xl font-black text-blue-700 mb-4">${skorAkhir}</div><p class="text-sm text-slate-500">Nilai sudah terekam di sistem sekolah.</p></div>`;
             showStudentModal("Pekerjaan Sukses Disimpan", pesanNilai, "success");
-            
-            // Tombol untuk kembali ke awal
-            document.getElementById('modalButtons').innerHTML = `<button onclick="window.location.reload()" class="px-8 py-3.5 bg-emerald-600 text-white font-bold rounded-xl w-full shadow-lg hover:bg-emerald-700">Tutup Ujian</button>`;
+            document.getElementById('modalButtons').innerHTML = `<button onclick="window.location.reload()" class="px-8 py-3.5 bg-emerald-600 text-white font-bold rounded-xl w-full hover:bg-emerald-700">Tutup Ujian</button>`;
         }
 
-        // --- ANTI CHEAT: DETEKSI PINDAH TAB ---
+        // --- PINTU RAHASIA ADMIN ---
+        function bukaPintuRahasia() {
+            const sandi = prompt("Masukkan Sandi Administrator:");
+            if (sandi === "admin123") {
+                window.location.href = "admin.html"; 
+            } else if (sandi !== null) {
+                alert("Sandi salah! Akses ditolak.");
+            }
+        }
+
+        // --- ANTI CHEAT ---
         document.addEventListener("visibilitychange", () => {
-            // Jika halaman disembunyikan (pindah tab), ada jadwal aktif, dan sedang di layar ujian
             if (document.hidden && jadwalAktif && !document.getElementById('examCard').classList.contains('hide')) {
                 cheatCount++;
-                // Simpan pelanggaran tanpa mengganggu siswa ujian
-                sb.from('hasil_ujian')
-                    .update({ cheat_count: cheatCount })
-                    .eq('id_jadwal', jadwalAktif.id)
-                    .eq('nis_siswa', dataSiswaAktif.nis);
-                
-                alert("PELANGGARAN: Sistem mencatat bahwa Anda terdeteksi keluar dari layar ujian!");
+                sb.from('hasil_ujian').update({ cheat_count: cheatCount }).eq('id_jadwal', jadwalAktif.id).eq('nis_siswa', dataSiswaAktif.nis);
+                alert("PELANGGARAN: Sistem mencatat Anda terdeteksi keluar dari layar ujian!");
             }
         });
     </script>

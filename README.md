@@ -4,37 +4,15 @@ Repo ini sekarang disusun ulang untuk deployment statis pada Vercel atau Netlify
 
 ## Struktur
 
-- `index.html` — halaman frontend utama yang dapat langsung di-deploy.
+- `index.html` — halaman siswa (halaman utama) yang langsung muncul di root.
+- `admin.html` — panel admin untuk upload soal dan rilis jadwal.
 - `server.js` — kode server Node.js lama yang tidak digunakan oleh hosting statis.
 - `netlify.toml` — konfigurasi Netlify untuk mempublikasikan root dan mendukung SPA.
-- `vercel.json` — konfigurasi Vercel untuk menyajikan `index.html` sebagai static site.
-
-## Cara deploy
-
-### Vercel
-1. Login ke Vercel.
-2. Pilih impor project dari Git.
-3. Pilih repository ini.
-4. Pilih framework "Other" atau "Static Site".
-5. Pastikan `Output Directory` kosong atau `.`.
-6. Deploy.
-
-### Netlify
-1. Login ke Netlify.
-2. Pilih "New site from Git".
-3. Pilih repository ini.
-4. Atur build command kosong.
-5. Set publish directory ke `.`.
-6. Deploy.
-
-## Catatan
-
-- `server.js` tidak dapat digunakan langsung pada hosting statis seperti Vercel/Netlify karena tergantung pada folder lokal audio dan akses filesystem.
-- Jika Anda ingin tetap menggunakan backend, jalankan `server.js` secara lokal di mesin sendiri, atau pisahkan backend ke environment server yang mendukung Node.
+- `vercel.json` — konfigurasi Vercel untuk menyajikan `index.html` sebagai halaman utama dan `/admin` untuk admin panel.
 
 ## Halaman Siswa
 
-- `siswa.html` adalah halaman ujian siswa terpisah.
+- `index.html` adalah halaman ujian siswa utama.
 - Siswa hanya perlu memasukkan NIS.
 - Setelah NIS ditemukan, halaman menampilkan nama, jurusan, dan kelas.
 - Setelah siswa mengonfirmasi data, sistem menampilkan kartu jadwal ujian:
@@ -65,8 +43,9 @@ Repo ini sekarang disusun ulang untuk deployment statis pada Vercel atau Netlify
 
 ## Konfigurasi Vercel
 
-- `vercel.json` sudah disiapkan untuk menyajikan `index.html`, `siswa.html`, dan API serverless.
-- Halaman siswa dapat diakses melalui `/siswa`.
+- `vercel.json` sudah disiapkan untuk menyajikan `index.html` dan `admin.html` dengan API serverless.
+- Halaman siswa menjadi halaman utama di root `/` (localhost:3000).
+- Panel admin dapat diakses melalui `/admin` atau langsung via `/admin.html`.
 
 ## Skala 1000 Siswa
 

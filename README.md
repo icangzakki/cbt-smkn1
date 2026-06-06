@@ -56,10 +56,9 @@ Repo ini sekarang disusun ulang untuk deployment statis pada Vercel atau Netlify
 - Pastikan Supabase memiliki tabel `siswa` yang berisi:
   - `nis`, `nama`, `jurusan`, `tingkat`, `rombel`
 - Pastikan Supabase memiliki tabel `hasil_ujian` yang berisi:
-  - `nis`, `siswa_nama`, `jurusan`, `tingkat`, `rombel`
-  - `jadwal_id`, `bank_soal_id`
+  - `jadwal_id`, `bank_soal_id`, `nis`, `siswa_nama`, `jurusan`, `tingkat`, `rombel`
   - `jawaban` (jsonb), `skor`, `total_soal`
-  - `started_at`, `finished_at`, `durasi_menit`
+  - `is_selesai`, `waktu_submit`
 - Jalankan di Vercel dengan environment variable berikut:
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`

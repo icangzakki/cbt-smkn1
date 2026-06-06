@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ujian Siswa - CBT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; }
+        .hide { display: none !important; }
+        .modal-masuk { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div id="studentModal" class="hide fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 modal-masuk text-center">
+            <div id="modalIcon" class="mx-auto w-16 h-16 mb-4 rounded-full flex items-center justify-center text-2xl"></div>
+            <h3 id="modalTitle" class="text-xl font-bold text-slate-800 mb-2">Pemberitahuan</h3>
+            <p id="modalMessage" class="text-slate-600 mb-6"></p>
+            <button onclick="document.getElementById('studentModal').classList.add('hide')" class="px-6 py-2.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 w-full shadow-lg shadow-slate-900/20">Tutup</button>
+        </div>
+    </div>
+
+    <div class="max-w-5xl mx-auto space-y-8 pb-10">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6 mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800">Ujian Siswa CBT</h1>
+                <p class="text-slate-500">Masukkan NIS kemudian pilih "Ya, Benar" untuk melihat jadwal ujian Anda.</p>
+            </div>
+            <a href="index.html" class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm">Panel Admin</a>
+        </header>
+
+        <div id="nisCard" class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+            <h2 class="text-xl font-bold mb-4 text-blue-700">Masuk dengan NIS</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">NIS</label>
+                    <input type="text" id="nisInput" placeholder="Masukkan nomor induk siswa" class="w-full p-3 rounded-2xl border border-slate-200 bg-slate-50 focus:outline-blue-500">
+                </div>
+                <button onclick="cariSiswa()" id="btnCariSiswa" class="bg-blue-600 text-white rounded-2xl px-6 py-3 font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-600/30">Cari Data</button>
+            </div>
+            <p id="nisStatus" class="mt-4 text-sm font-semibold text-slate-600"></p>
+        </div>
+
+        <div id="studentInfoCard" class="hide bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+            <h2 class="text-xl font-bold mb-4 text-emerald-700">Data Siswa</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-700">
+                <div><span class="font-semibold">NIS:</span> <span id="studentNis"></span></div>
+                <div><span class="font-semibold">Nama:</span> <span id="studentName"></span></div>
+                <div><span class="font-semibold">Jurusan:</span> <span id="studentJurusan"></span></div>
+                <div><span class="font-semibold">Kelas:</span> <span id="studentKelas"></span></div>
+            </div>
+            <div class="mt-6">
+                <button onclick="konfirmasiDataSiswa()" id="btnConfirmStudent" class="bg-emerald-600 text-white rounded-2xl px-6 py-3 font-bold hover:bg-emerald-700 transition shadow-lg shadow-emerald-600/30">Ya, Benar</button>
+            </div>
+        </div>
+
+        <div id="scheduleCard" class="hide bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">Jadwal Ujian</h2>
+                    <p id="scheduleStatusText" class="text-slate-500 mt-1"></p>
+                </div>
+                <div class="text-right">
+                    <p class="text-slate-500">Waktu sebelum mulai</p>
+                    <p class="text-3xl font-bold text-blue-600" id="scheduleTimer">00:00:00</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-700">
+                <div><span class="font-semibold">Mapel:</span> <span id="scheduleMapel"></span></div>
+                <div><span class="font-semibold">Guru:</span> <span id="scheduleGuru"></span></div>
+                <div><span class="font-semibold">Tanggal:</span> <span id="scheduleTanggal"></span></div>
+                <div><span class="font-semibold">Jam Aktif:</span> <span id="scheduleJamMulai"></span></div>
+                <div><span class="font-semibold">Jam Nonaktif:</span> <span id="scheduleJamSelesai"></span></div>
+                <div><span class="font-semibold">Durasi Ujian:</span> <span id="scheduleDurasi"></span></div>
+            </div>
+            <div class="mt-6">
+                <button onclick="startExam()" id="btnStartExam" class="bg-emerald-600 text-white rounded-2xl px-6 py-3 font-bold hover:bg-emerald-700 transition shadow-lg shadow-emerald-600/30" disabled>Mulai Ujian</button>
+                <p id="scheduleMessage" class="mt-3 text-sm font-semibold text-slate-500"></p>
+            </div>
+        </div>
+
+        <div id="examCard" class="hide bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">Soal Ujian</h2>
+                    <p class="text-slate-500 mt-1">Kerjakan soal dan kirim sebelum waktu habis.</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-slate-500">Waktu tersisa</p>
+                    <p class="text-3xl font-bold text-emerald-600" id="examTimer">00:00:00</p>
+                </div>
+            </div>
+            <div id="questionList" class="space-y-6"></div>
+            <div class="mt-8 flex flex-col md:flex-row gap-4 items-center">
+                <button onclick="submitUjian(false)" id="btnSubmitExam" class="bg-slate-700 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800 transition shadow-lg shadow-slate-700/30">Kirim Jawaban</button>
+                <p id="examMessage" class="text-sm font-semibold text-slate-500"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const apiRoot = '/api';
+        let currentStudent = null;
+        let currentSchedule = null;
+        let currentBankSoal = null;
+        let scheduleInterval = null;
+        let examInterval = null;
+        let examSecondsLeft = 0;
+        let examStartTime = null;
+
+        function showStudentModal(title, msg, type='info') {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').innerHTML = msg;
+            const icon = document.getElementById('modalIcon');
+            if(type === 'error') {
+                icon.className = 'mx-auto w-16 h-16 mb-4 rounded-full flex items-center justify-center text-3xl bg-red-100 text-red-500';
+                icon.innerHTML = '✖';
+            } else if(type === 'success') {
+                icon.className = 'mx-auto w-16 h-16 mb-4 rounded-full flex items-center justify-center text-3xl bg-emerald-100 text-emerald-500';
+                icon.innerHTML = '✔';
+            } else {
+                icon.className = 'mx-auto w-16 h-16 mb-4 rounded-full flex items-center justify-center text-3xl bg-blue-100 text-blue-500';
+                icon.innerHTML = 'ℹ';
+            }
+            document.getElementById('studentModal').classList.remove('hide');
+        }
+
+        function setStatus(text) {
+            document.getElementById('nisStatus').textContent = text;
+        }
+
+        function formatDuration(seconds) {
+            const hours = String(Math.floor(seconds / 3600)).padStart(2, '0');
+            const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+            const secs = String(seconds % 60).padStart(2, '0');
+            return `${hours}:${minutes}:${secs}`;
+        }
+
+        async function cariSiswa() {
+            const nis = document.getElementById('nisInput').value.trim();
+            if (!nis) {
+                return showStudentModal('NIS Kosong', 'Masukkan NIS terlebih dahulu.', 'error');
+            }
+            setStatus('Mencari data siswa...');
+            hideSections(['studentInfoCard', 'scheduleCard', 'examCard']);
+            clearIntervals();
+
+            try {
+                const response = await fetch(`${apiRoot}/student-profile?nis=${encodeURIComponent(nis)}`);
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    setStatus('Data siswa tidak ditemukan.');
+                    return showStudentModal('Gagal', result.message || 'Tidak dapat mencari data siswa.', 'error');
+                }
+
+                currentStudent = result.profile;
+                currentSchedule = result.schedule;
+                currentBankSoal = result.bank_soal;
+                renderStudentInfo();
+                setStatus('Data siswa ditemukan. Klik "Ya, Benar" untuk melihat jadwal.');
+            } catch (err) {
+                console.error(err);
+                setStatus('Gagal mencari data siswa. Coba lagi.');
+                showStudentModal('Gagal', err.message || 'Terjadi kesalahan saat mengambil data.', 'error');
+            }
+        }
+
+        function renderStudentInfo() {
+            document.getElementById('studentNis').textContent = currentStudent.nis;
+            document.getElementById('studentName').textContent = currentStudent.nama;
+            document.getElementById('studentJurusan').textContent = currentStudent.jurusan;
+            document.getElementById('studentKelas').textContent = `${currentStudent.tingkat} ${currentStudent.rombel}`;
+            document.getElementById('studentInfoCard').classList.remove('hide');
+        }
+
+        function konfirmasiDataSiswa() {
+            if (!currentStudent) return;
+            if (!currentSchedule) {
+                showStudentModal('Tidak Ada Jadwal', 'Tidak ditemukan jadwal ujian untuk NIS ini pada tanggal saat ini atau mendatang.', 'error');
+                return;
+            }
+            renderScheduleCard();
+            document.getElementById('scheduleCard').classList.remove('hide');
+            setStatus('Jadwal ujian ditemukan. Lihat informasi ujian dan tunggu tombol mulai aktif.');
+        }
+
+        function renderScheduleCard() {
+            document.getElementById('scheduleMapel').textContent = currentSchedule.nama_mapel;
+            document.getElementById('scheduleGuru').textContent = currentSchedule.nama_pengajar;
+            document.getElementById('scheduleTanggal').textContent = currentSchedule.tanggal;
+            document.getElementById('scheduleJamMulai').textContent = currentSchedule.jam_mulai;
+            document.getElementById('scheduleJamSelesai').textContent = currentSchedule.jam_selesai;
+            document.getElementById('scheduleDurasi').textContent = `${currentBankSoal.durasi_menit} menit`;
+            updateScheduleStatus();
+            if (!scheduleInterval) {
+                scheduleInterval = setInterval(updateScheduleStatus, 1000);
+            }
+        }
+
+        function updateScheduleStatus() {
+            const now = new Date();
+            const start = new Date(currentSchedule.starts_at);
+            const end = new Date(currentSchedule.ends_at);
+            const button = document.getElementById('btnStartExam');
+            let statusText = '';
+            let secondsUntilStart = Math.max(0, Math.round((start - now) / 1000));
+            let secondsUntilEnd = Math.max(0, Math.round((end - now) / 1000));
+
+            if (now >= end) {
+                statusText = 'Jadwal ujian telah berakhir.';
+                button.disabled = true;
+                document.getElementById('scheduleTimer').textContent = '00:00:00';
+            } else if (now >= start) {
+                statusText = 'Jadwal ujian aktif. Anda bisa mulai ujian sekarang.';
+                button.disabled = false;
+                document.getElementById('scheduleTimer').textContent = formatDuration(secondsUntilEnd);
+            } else {
+                statusText = `Ujian akan dimulai dalam ${formatDuration(secondsUntilStart)}.`;
+                button.disabled = true;
+                document.getElementById('scheduleTimer').textContent = formatDuration(secondsUntilStart);
+            }
+
+            document.getElementById('scheduleStatusText').textContent = statusText;
+            document.getElementById('scheduleMessage').textContent = button.disabled ? 'Tunggu sampai jadwal aktif sebelum mulai ujian.' : 'Klik Mulai Ujian untuk membuka soal.';
+        }
+
+        function startExam() {
+            if (!currentSchedule || !currentBankSoal) return;
+            const now = new Date();
+            if (now < new Date(currentSchedule.starts_at)) {
+                return showStudentModal('Belum Mulai', 'Jadwal ujian belum tiba. Tunggu sampai waktunya.', 'error');
+            }
+            if (now >= new Date(currentSchedule.ends_at)) {
+                return showStudentModal('Ujian Berakhir', 'Waktu ujian sudah berakhir.', 'error');
+            }
+
+            examSecondsLeft = currentBankSoal.durasi_menit * 60;
+            examStartTime = new Date().toISOString();
+            document.getElementById('examCard').classList.remove('hide');
+            renderQuestionList();
+            document.getElementById('scheduleMessage').textContent = 'Ujian dimulai. Kerjakan soal dan kirim sebelum waktu habis.';
+            clearInterval(examInterval);
+            examInterval = setInterval(() => {
+                examSecondsLeft -= 1;
+                document.getElementById('examTimer').textContent = formatDuration(examSecondsLeft);
+                if (examSecondsLeft <= 0) {
+                    clearInterval(examInterval);
+                    submitUjian(true);
+                }
+            }, 1000);
+            document.getElementById('btnStartExam').disabled = true;
+        }
+
+        function renderQuestionList() {
+            const container = document.getElementById('questionList');
+            container.innerHTML = currentBankSoal.soal.map((item, index) => {
+                const options = ['A', 'B', 'C', 'D'].map(letter => {
+                    const text = item.opsi[letter.charCodeAt(0) - 65] || '';
+                    return `
+                        <label class="flex items-center gap-3 rounded-2xl p-3 border border-slate-200 bg-white hover:bg-slate-100">
+                            <input type="radio" name="answer-${index}" value="${letter}" onchange="jawabanSiswa[${index}] = this.value">
+                            <span class="font-semibold">${letter}.</span>
+                            <span>${text}</span>
+                        </label>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="rounded-2xl border border-slate-200 p-5 bg-slate-50">
+                        <div class="mb-4"><span class="font-bold">${index + 1}.</span> ${item.text}</div>
+                        ${options}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        const jawabanSiswa = {};
+
+        function hideSections(ids) {
+            ids.forEach(id => document.getElementById(id)?.classList.add('hide'));
+        }
+
+        function clearIntervals() {
+            if (scheduleInterval) {
+                clearInterval(scheduleInterval);
+                scheduleInterval = null;
+            }
+            if (examInterval) {
+                clearInterval(examInterval);
+                examInterval = null;
+            }
+        }
+
+        async function submitUjian(auto = false) {
+            if (!currentStudent || !currentSchedule || !currentBankSoal) return;
+            clearInterval(examInterval);
+            const finishTime = new Date().toISOString();
+            document.getElementById('btnSubmitExam').disabled = true;
+            document.getElementById('btnSubmitExam').textContent = auto ? 'Mengirim otomatis...' : 'Mengirim...';
+
+            const payload = {
+                nis: currentStudent.nis,
+                siswa_nama: currentStudent.nama,
+                jurusan: currentStudent.jurusan,
+                tingkat: currentStudent.tingkat,
+                rombel: currentStudent.rombel,
+                jadwal_id: currentSchedule.id,
+                bank_soal_id: currentSchedule.bank_soal_id,
+                jawaban: jawabanSiswa,
+                started_at: examStartTime || new Date().toISOString(),
+                finished_at: finishTime,
+                durasi_menit: currentBankSoal.durasi_menit
+            };
+
+            try {
+                const response = await fetch(`${apiRoot}/submit-exam`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || 'Gagal mengirim jawaban.');
+                }
+                showStudentModal('Selesai', `Ujian berhasil dikirim! Skor Anda: <strong>${result.skor}/${result.total_soal}</strong>`, 'success');
+                document.getElementById('examMessage').textContent = 'Jawaban berhasil dikirim.';
+            } catch (err) {
+                console.error(err);
+                document.getElementById('examMessage').textContent = 'Gagal mengirim jawaban. Coba lagi.';
+                showStudentModal('Gagal Mengirim', err.message || 'Terjadi kesalahan saat mengirim jawaban.', 'error');
+            } finally {
+                document.getElementById('btnSubmitExam').disabled = false;
+                document.getElementById('btnSubmitExam').textContent = 'Kirim Jawaban';
+            }
+        }
+    </script>
+</body>
+</html>

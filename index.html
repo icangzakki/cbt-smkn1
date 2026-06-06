@@ -1,185 +1,331 @@
-const express = require('express');
-const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
-const axios = require('axios');
-const os = require('os');
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Guru & Admin - CBT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; }
+        .hide { display: none !important; }
+        .modal-masuk { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .cb-modern { @apply flex items-center gap-2 cursor-pointer bg-white px-3 py-2 border border-slate-200 rounded-lg hover:bg-emerald-50 hover:border-emerald-300 transition shadow-sm; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
 
-const app = express();
-const PORT = 3000;
+    <div id="adminModal" class="hide fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 modal-masuk text-center">
+            <div id="modalIcon" class="mx-auto w-16 h-16 mb-4 rounded-full flex items-center justify-center text-2xl"></div>
+            <h3 id="modalTitle" class="text-xl font-bold text-slate-800 mb-2">Pemberitahuan</h3>
+            <p id="modalMessage" class="text-slate-600 mb-6"></p>
+            <button onclick="document.getElementById('adminModal').classList.add('hide')" class="px-6 py-2.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 w-full shadow-lg shadow-slate-900/20">Tutup</button>
+        </div>
+    </div>
 
-// Deteksi OS untuk menentukan folder audio default secara otomatis
-const isWin = process.platform === 'win32';
-let AUDIO_DIR = isWin 
-    ? 'D:/BELL_SEKOLAH/audio' 
-    : path.join(os.homedir(), 'BellSekolah', 'audio');
+    <div class="max-w-4xl mx-auto space-y-8 pb-10">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-6 mb-6 gap-4">
+    <div class="flex items-center gap-4">
+        <img src="https://www.image2url.com/r2/default/images/1780556788630-285bb5c4-243f-435b-9319-dfc7d320683e.jpeg" 
+             alt="Logo" class="w-16 h-16 object-contain">
+        <div>
+            <h1 class="text-3xl font-bold text-slate-800">Manajemen Ujian CBT</h1>
+            <p class="text-slate-500">SMKN 1 Banjarmasin</p>
+        </div>
+    </div>
+    <a href="siswa.html" class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm">Halaman Siswa</a>
+</header>
 
-const CACHE_FILE = path.join(__dirname, 'jadwal_cache.json');
-
-// Variabel penanda waktu untuk mencegah tabrakan sinkronisasi (stale cache protection)
-let lastSavedTime = 0;
-
-// Buat folder audio secara otomatis jika belum ada dengan proteksi fallback jika Drive D tidak ada
-try {
-    if (!fs.existsSync(AUDIO_DIR)) {
-        fs.mkdirSync(AUDIO_DIR, { recursive: true });
-    }
-} catch (error) {
-    if (isWin && AUDIO_DIR.startsWith('D:')) {
-        console.log('⚠️ Drive D: tidak ditemukan atau tidak dapat diakses.');
-        console.log('🔄 Otomatis mengalihkan folder audio ke C:/BellSekolah/audio...');
-        AUDIO_DIR = 'C:/BellSekolah/audio';
-        if (!fs.existsSync(AUDIO_DIR)) {
-            fs.mkdirSync(AUDIO_DIR, { recursive: true });
-        }
-    } else {
-        console.error('Gagal membuat folder audio:', error.message);
-    }
-}
-
-app.use(cors());
-app.use(express.json());
-
-// 1. Sajikan file audio secara statis agar dapat di-stream oleh browser
-app.use('/audio', express.static(AUDIO_DIR));
-
-// 2. Sajikan file frontend secara statis agar terhindar dari isu CORS
-const FRONTEND_DIR = path.join(__dirname, '../frontend');
-app.use('/', express.static(FRONTEND_DIR));
-
-// URL Web App Apps Script Anda yang baru
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxxAHs1Y7yKU2V9SvVBu-Avs1uNzqzW9-67iHzmEtAcayR9af2SrBB2uyJA0kxvFy4/exec';
-
-// Rute Diagnostik Pintar untuk / agar jika index.html hilang, sistem memberikan panduan perbaikan yang jelas
-app.get('/', (req, res) => {
-    const indexPath = path.join(FRONTEND_DIR, 'index.html');
-    if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-    } else {
-        res.status(404).send(`
-            <div style="font-family: sans-serif; padding: 40px; background-color: #0f172a; color: #f1f5f9; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0;">
-                <div style="background-color: #1e293b; padding: 35px; border-radius: 16px; border: 1px solid #f43f5e; max-width: 600px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3);">
-                    <h1 style="color: #f43f5e; margin-top: 0; font-size: 24px; display: flex; align-items: center; gap: 10px;">❌ File index.html Tidak Ditemukan</h1>
-                    <p style="font-size: 16px; color: #cbd5e1; line-height: 1.5;">Server lokal berjalan sukses, namun tidak dapat menemukan berkas halaman utama dashboard Anda (<code>index.html</code>).</p>
-                    <p style="font-size: 15px; color: #cbd5e1;"><strong>Lokasi yang dicari oleh server Anda saat ini:</strong></p>
-                    <code style="background-color: #0f172a; padding: 10px 14px; border-radius: 8px; display: block; margin: 10px 0; color: #38bdf8; font-family: monospace; word-break: break-all; border: 1px solid #334155;">${indexPath}</code>
-                    <p style="font-size: 15px; color: #cbd5e1; font-weight: bold; margin-top: 20px;">Solusi Perbaikan:</p>
-                    <ol style="padding-left: 20px; line-height: 1.6; color: #cbd5e1; font-size: 15px;">
-                        <li>Pastikan Anda telah membuat folder bernama <strong style="color: #38bdf8;">frontend</strong> di dalam folder induk <code style="background-color: #0f172a; padding: 2px 6px; border-radius: 4px;">C:\\Bell Sekolah\\</code>.</li>
-                        <li>Pastikan berkas <strong style="color: #38bdf8;">index.html</strong> diletakkan di dalam folder <code style="background-color: #0f172a; padding: 2px 6px; border-radius: 4px;">frontend</code> tersebut, bukan di luar atau di dalam <code style="background-color: #0f172a; padding: 2px 6px; border-radius: 4px;">audio_server</code>.</li>
-                    </ol>
-                    <hr style="border: 0; border-top: 1px solid #334155; margin: 20px 0;">
-                    <p style="margin-bottom: 0; color: #94a3b8; font-size: 13px; line-height: 1.5; font-family: monospace;">Struktur folder yang benar seharusnya:<br>
-                    📁 C:/Bell Sekolah/<br>
-                    ├── 📁 frontend/<br>
-                    │   └── 📄 index.html  &lt;-- Letakkan berkas HTML di sini<br>
-                    └── 📁 audio_server/<br>
-                        └── 📄 server.js   &lt;-- Berkas server Node.js
-                    </p>
+        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+            <h2 class="text-xl font-bold mb-5 border-b pb-2 text-blue-700">1. Upload Bank Soal (Guru)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-semibold mb-1 text-slate-700">Mata Pelajaran</label>
+                    <input type="text" id="mapel" placeholder="Contoh: Admin Sistem Jaringan" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1 text-slate-700">Durasi Ujian (Menit)</label>
+                    <input type="number" id="durasi" value="90" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-blue-500">
                 </div>
             </div>
-        `);
-    }
-});
+            
+            <div class="mb-5">
+                <label class="block text-sm font-semibold mb-2 text-slate-700">Pilih File Excel (Kolom: soal | A | B | C | D | jawaban)</label>
+                <input type="file" id="fileSoal" accept=".xlsx, .xls, .csv" class="w-full p-2.5 border border-slate-200 rounded-xl bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700">
+            </div>
+            
+            <button onclick="prosesExcel()" id="btnUpload" class="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-600/30">Simpan ke Database Soal</button>
+            <p id="statusUpload" class="mt-3 text-sm font-semibold text-emerald-600"></p>
+        </div>
 
-// Simpan Cache Jadwal Secara Lokal
-function saveCache(data) {
-    try {
-        fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    } catch (err) {
-        console.error('Gagal menulis cache jadwal:', err);
-    }
-}
+        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+            <h2 class="text-xl font-bold mb-5 border-b pb-2 text-emerald-700">2. Rilis Jadwal Ujian (Admin)</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-semibold mb-1 text-slate-700">Pilih Master Soal</label>
+                    <select id="selectBankSoal" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-emerald-500"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1 text-slate-700">Nama Guru Pengajar</label>
+                    <input type="text" id="namaPengajar" placeholder="Contoh: Bpk. Ihsan Muzakki" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-emerald-500">
+                </div>
+            </div>
 
-// Ambil Cache Jadwal
-function getCache() {
-    try {
-        if (fs.existsSync(CACHE_FILE)) {
-            const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
-            return JSON.parse(raw);
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                <div>
+                    <label class="block text-sm font-semibold mb-1 text-slate-700">Tanggal Pelaksanaan</label>
+                    <input type="date" id="tanggalJadwal" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1 text-slate-700">Jam Soal Aktif</label>
+                    <input type="time" id="jamMulai" value="07:00" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1 text-slate-700">Jam Soal Nonaktif</label>
+                    <input type="time" id="jamSelesai" value="09:00" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-emerald-500">
+                </div>
+            </div>
+
+            <div class="mb-6 bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-inner">
+                <label class="block font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Target Peserta Ujian</label>
+                
+                <div class="mb-4">
+                    <span class="block text-xs font-bold text-slate-500 uppercase mb-2">1. Pilih Jurusan:</span>
+                    <div class="flex flex-wrap gap-2">
+                        <label class="cb-modern"><input type="checkbox" name="jurusanTarget" value="TJKT" class="w-4 h-4 accent-emerald-600"> <span class="font-bold text-slate-700">TJKT</span></label>
+                        <label class="cb-modern"><input type="checkbox" name="jurusanTarget" value="DKV" class="w-4 h-4 accent-emerald-600"> <span class="font-bold text-slate-700">DKV</span></label>
+                        <label class="cb-modern"><input type="checkbox" name="jurusanTarget" value="MPLB" class="w-4 h-4 accent-emerald-600"> <span class="font-bold text-slate-700">MPLB</span></label>
+                        <label class="cb-modern"><input type="checkbox" name="jurusanTarget" value="AKL" class="w-4 h-4 accent-emerald-600"> <span class="font-bold text-slate-700">AKL</span></label>
+                        <label class="cb-modern"><input type="checkbox" name="jurusanTarget" value="PM" class="w-4 h-4 accent-emerald-600"> <span class="font-bold text-slate-700">PM</span></label>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <span class="block text-xs font-bold text-slate-500 uppercase mb-2">2. Pilih Tingkat Kelas:</span>
+                    <div class="flex flex-wrap gap-2">
+                        <label class="cb-modern"><input type="checkbox" name="tingkatTarget" value="X" class="w-4 h-4 accent-blue-600"> <span class="font-bold text-slate-700">Kelas X</span></label>
+                        <label class="cb-modern"><input type="checkbox" name="tingkatTarget" value="XI" class="w-4 h-4 accent-blue-600"> <span class="font-bold text-slate-700">Kelas XI</span></label>
+                        <label class="cb-modern"><input type="checkbox" name="tingkatTarget" value="XII" class="w-4 h-4 accent-blue-600"> <span class="font-bold text-slate-700">Kelas XII</span></label>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="block text-xs font-bold text-slate-500 uppercase mb-2">3. Pilih Rombel / Grup:</span>
+                    <div class="flex flex-wrap gap-2">
+                        <label class="cb-modern"><input type="checkbox" name="rombelTarget" value="A" class="w-4 h-4 accent-orange-600"> <span class="font-bold text-slate-700">A</span></label>
+                        <label class="cb-modern"><input type="checkbox" name="rombelTarget" value="B" class="w-4 h-4 accent-orange-600"> <span class="font-bold text-slate-700">B</span></label>
+                        <label class="cb-modern"><input type="checkbox" name="rombelTarget" value="C" class="w-4 h-4 accent-orange-600"> <span class="font-bold text-slate-700">C</span></label>
+                        <label class="cb-modern"><input type="checkbox" name="rombelTarget" value="D" class="w-4 h-4 accent-orange-600"> <span class="font-bold text-slate-700">D</span></label>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="rilisJadwal()" id="btnRilis" class="bg-emerald-600 text-white w-full md:w-auto px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition">Rilis Jadwal Sekarang</button>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://lntfulglflqoatahvwjd.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_fCSKRizp5vzbFUxBsTcb5g_jSSSOO0h';
+        const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const MAX_BANK_SOAL_FETCH = 200;
+        const REQUIRED_EXCEL_FIELDS = ['soal', 'a', 'b', 'c', 'd', 'jawaban'];
+
+        function showAdminModal(title, msg, type = 'info') {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').innerHTML = msg;
+
+            const icon = document.getElementById('modalIcon');
+            if (type === 'error') {
+                icon.className = 'mx-auto w-16 h-16 mb-4 rounded-full flex items-center justify-center text-3xl bg-red-100 text-red-500';
+                icon.innerHTML = '✖';
+            } else if (type === 'success') {
+                icon.className = 'mx-auto w-16 h-16 mb-4 rounded-full flex items-center justify-center text-3xl bg-emerald-100 text-emerald-500';
+                icon.innerHTML = '✔';
+            } else {
+                icon.className = 'mx-auto w-16 h-16 mb-4 rounded-full flex items-center justify-center text-3xl bg-blue-100 text-blue-500';
+                icon.innerHTML = 'ℹ';
+            }
+            document.getElementById('adminModal').classList.remove('hide');
         }
-    } catch (err) {
-        console.error('Gagal membaca cache jadwal:', err);
-    }
-    return [];
-}
 
-// Endpoint 1: Mendapatkan daftar file audio lokal
-app.get('/api/audio-list', (req, res) => {
-    try {
-        const files = fs.readdirSync(AUDIO_DIR);
-        const audioFiles = files.filter(file => {
-            const ext = path.extname(file).toLowerCase();
-            return ext === '.mp3' || ext === '.wav' || ext === '.ogg';
+        function normalizeKey(key) {
+            return String(key || '').trim().toLowerCase();
+        }
+
+        function buildRow(row, index) {
+            const normalized = {};
+            Object.entries(row).forEach(([key, value]) => {
+                normalized[normalizeKey(key)] = value;
+            });
+            return {
+                id: index + 1,
+                text: String(normalized.soal || '').trim(),
+                opsi: [normalized.a, normalized.b, normalized.c, normalized.d].map(opt => String(opt || '').trim()),
+                jawaban: String(normalized.jawaban || '').trim()
+            };
+        }
+
+        function hasRequiredFields(row) {
+            return REQUIRED_EXCEL_FIELDS.every(field => Object.hasOwn(row, field) && String(row[field]).trim() !== '');
+        }
+
+        let parsedData = [];
+        document.getElementById('fileSoal').addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (!file) {
+                parsedData = [];
+                document.getElementById('statusUpload').textContent = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (evt) {
+                try {
+                    const workbook = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+                    const rawJson = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
+
+                    if (!rawJson.length) {
+                        parsedData = [];
+                        return showAdminModal('Gagal', 'File Excel kosong atau tidak memiliki data.', 'error');
+                    }
+
+                    const normalizedHeader = Object.keys(rawJson[0]).map(normalizeKey);
+                    const missingFields = REQUIRED_EXCEL_FIELDS.filter(field => !normalizedHeader.includes(field));
+                    if (missingFields.length) {
+                        parsedData = [];
+                        return showAdminModal('Format Tidak Valid', `Header Excel harus berisi: ${REQUIRED_EXCEL_FIELDS.join(', ')}. Kolom yang hilang: ${missingFields.join(', ')}.`, 'error');
+                    }
+
+                    parsedData = rawJson.map(buildRow).filter(hasRequiredFields);
+                    if (!parsedData.length) {
+                        return showAdminModal('Gagal', 'Semua baris harus memiliki soal dan jawaban yang lengkap.', 'error');
+                    }
+
+                    document.getElementById('statusUpload').textContent = `${parsedData.length} soal terbaca.`;
+                } catch (err) {
+                    parsedData = [];
+                    showAdminModal('Error File', 'Tidak dapat membaca file Excel. Pastikan format .xlsx atau .csv valid.', 'error');
+                    console.error(err);
+                }
+            };
+            reader.readAsArrayBuffer(file);
         });
-        res.json({ success: true, data: audioFiles });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Gagal memindai folder audio', error: error.message });
-    }
-});
 
-// Endpoint 2: Proxy mendapatkan jadwal dari Apps Script dengan perlindungan Offline Cache & Caching Prevention
-app.get('/api/jadwal', async (req, res) => {
-    // PROTEKSI UTAMA: Jika proses simpan lokal (POST) baru terjadi kurang dari 15 detik lalu,
-    // langsung sajikan data cache lokal terbaru untuk menghindari 'stale read' (data lama yang muncul lagi) dari Google Server
-    const timeSinceLastSave = Date.now() - lastSavedTime;
-    if (timeSinceLastSave < 15000) {
-        console.log('⚡ Menyajikan cache instan lokal untuk mencegah kembalinya jadwal yang telah dihapus (Stale Read Protection)...');
-        return res.json({ success: true, source: 'local_cache', data: getCache() });
-    }
+        async function prosesExcel() {
+            if (parsedData.length === 0) return showAdminModal('Gagal', 'Pilih file Excel yang valid dahulu!', 'error');
 
-    try {
-        const response = await axios.get(`${APPS_SCRIPT_URL}?action=getJadwal&t=${Date.now()}`, { timeout: 4000 });
-        if (response.data && response.data.success) {
-            saveCache(response.data.data);
-            return res.json({ success: true, source: 'cloud', data: response.data.data });
+            const btn = document.getElementById('btnUpload');
+            const mapel = document.getElementById('mapel').value.trim();
+            const durasi = Number(document.getElementById('durasi').value);
+
+            if (!mapel) return showAdminModal('Gagal', 'Nama Mapel belum diisi!', 'error');
+            if (!Number.isFinite(durasi) || durasi <= 0) return showAdminModal('Gagal', 'Durasi ujian harus berupa angka positif.', 'error');
+
+            btn.disabled = true;
+            btn.textContent = 'Menyimpan...';
+
+            try {
+                const { error } = await sb.from('bank_soal').insert([{ nama_mapel: mapel, durasi_menit: durasi, soal: parsedData }]);
+                if (error) throw error;
+
+                showAdminModal('Sukses', `Berhasil menyimpan <b>${parsedData.length}</b> soal.`, 'success');
+                document.getElementById('statusUpload').textContent = '';
+                document.getElementById('fileSoal').value = '';
+                parsedData = [];
+                await muatDropdownBankSoal();
+            } catch (error) {
+                showAdminModal('Error Database', error.message || 'Terjadi kesalahan saat menyimpan soal.', 'error');
+                console.error(error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Simpan ke Database Soal';
+            }
         }
-        throw new Error('Respons tidak valid dari Cloud');
-    } catch (error) {
-        console.log('Koneksi internet lambat/offline. Memuat jadwal dari cache lokal...');
-        const cachedData = getCache();
-        res.json({ success: true, source: 'local_cache', data: cachedData });
-    }
-});
 
-// Endpoint 3: Menyimpan jadwal baru ke Google Spreadsheet / Lokal
-app.post('/api/save-jadwal', async (req, res) => {
-    // Kunci waktu penyimpanan aktif detik ini
-    lastSavedTime = Date.now();
-    saveCache(req.body); // Langsung amankan data terhapus ke cache lokal seketika
+        async function muatDropdownBankSoal() {
+            const select = document.getElementById('selectBankSoal');
+            select.innerHTML = '<option value="">Memuat data...</option>';
 
-    try {
-        const response = await axios.post(`${APPS_SCRIPT_URL}?action=saveJadwal`, req.body, { timeout: 6000 });
-        if (response.data && response.data.success) {
-            return res.json({ success: true, source: 'cloud', message: 'Berhasil menyimpan jadwal ke Spreadsheet!' });
+            try {
+                const { data, error } = await sb.from('bank_soal')
+                    .select('id, nama_mapel, dibuat_pada')
+                    .order('dibuat_pada', { ascending: false })
+                    .limit(MAX_BANK_SOAL_FETCH);
+
+                if (error) throw error;
+                if (!data || data.length === 0) {
+                    select.innerHTML = '<option value="">-- Belum ada soal --</option>';
+                    return;
+                }
+
+                select.innerHTML = data.map(b => {
+                    const displayId = typeof b.id === 'string' ? b.id.substring(0, 5) : String(b.id).slice(0, 5);
+                    return `<option value="${b.id}">${b.nama_mapel} (ID: ${displayId})</option>`;
+                }).join('');
+            } catch (error) {
+                select.innerHTML = '<option value="">-- Gagal memuat soal --</option>';
+                showAdminModal('Gagal Memuat', error.message || 'Tidak dapat mengambil daftar bank soal.', 'error');
+                console.error(error);
+            }
         }
-        res.status(500).json({ success: false, message: 'Gagal menyimpan ke Google Sheets' });
-    } catch (error) {
-        res.json({ 
-            success: true, 
-            source: 'local_only', 
-            message: 'Tersimpan lokal (Offline). Jadwal Anda tetap aktif di PC ini!' 
-        });
-    }
-});
 
-// Endpoint 4: Mencatat Log Bell
-app.post('/api/log', async (req, res) => {
-    const logData = req.body;
-    console.log(`[LOG BELL] [${logData.waktu}] ${logData.kegiatan} - ${logData.audio} (${logData.status})`);
-    
-    try {
-        await axios.post(`${APPS_SCRIPT_URL}?action=logBell`, logData, { timeout: 4000 });
-        res.json({ success: true, message: 'Log terkirim ke Cloud' });
-    } catch (error) {
-        res.json({ success: false, message: 'Offline, log tersimpan di konsol lokal saja' });
-    }
-});
+        async function rilisJadwal() {
+            const idSoal = document.getElementById('selectBankSoal').value;
+            const tgl = document.getElementById('tanggalJadwal').value;
+            const guru = document.getElementById('namaPengajar').value.trim() || '-';
+            let jamMulai = document.getElementById('jamMulai').value;
+            let jamAkhir = document.getElementById('jamSelesai').value;
+            const selectEl = document.getElementById('selectBankSoal');
+            const namaMapel = selectEl.options[selectEl.selectedIndex]?.text || '';
 
-app.listen(PORT, () => {
-    console.log('===================================================');
-    console.log(`🔊 SERVER AUDIO BELL SEKOLAH AKTIF (CROSS-PLATFORM)!`);
-    console.log(`🔗 Lokal Dashboard: http://localhost:${PORT}`);
-    console.log(`📁 Folder Audio: ${AUDIO_DIR}`);
-    console.log('===================================================');
-});
+            const jurusanDipilih = Array.from(document.querySelectorAll('input[name="jurusanTarget"]:checked')).map(cb => cb.value);
+            const tingkatDipilih = Array.from(document.querySelectorAll('input[name="tingkatTarget"]:checked')).map(cb => cb.value);
+            const rombelDipilih = Array.from(document.querySelectorAll('input[name="rombelTarget"]:checked')).map(cb => cb.value);
+
+            if (!idSoal || !tgl || !jamMulai || !jamAkhir) return showAdminModal('Data Tidak Lengkap', 'Pastikan Bank Soal, Tanggal, dan Jam sudah diisi!', 'error');
+            if (!jurusanDipilih.length || !tingkatDipilih.length || !rombelDipilih.length) return showAdminModal('Target Kosong', 'Pilih minimal 1 Jurusan, 1 Tingkat, dan 1 Rombel!', 'error');
+
+            const kelasKombinasi = [];
+            tingkatDipilih.forEach(tingkat => rombelDipilih.forEach(rombel => kelasKombinasi.push(`${tingkat} ${rombel}`)));
+
+            jamMulai = jamMulai.length === 5 ? `${jamMulai}:00` : jamMulai;
+            jamAkhir = jamAkhir.length === 5 ? `${jamAkhir}:00` : jamAkhir;
+
+            const btn = document.getElementById('btnRilis');
+            btn.disabled = true;
+            btn.textContent = 'Memproses...';
+
+            try {
+                const namaMapelText = namaMapel.split(' (')[0].trim();
+                const { error } = await sb.from('jadwal_ujian').insert([{
+                    bank_soal_id: idSoal,
+                    nama_mapel: namaMapelText,
+                    nama_pengajar: guru,
+                    tanggal: tgl,
+                    jam_mulai: jamMulai,
+                    jam_selesai: jamAkhir,
+                    jurusan: jurusanDipilih,
+                    kelas: kelasKombinasi
+                }]);
+
+                if (error) throw error;
+                showAdminModal('Jadwal Aktif!', `Jadwal berhasil dirilis untuk Jurusan <b>${jurusanDipilih.join(', ')}</b><br>Kelas: <b>${kelasKombinasi.join(', ')}</b><br>Guru: ${guru}`, 'success');
+            } catch (error) {
+                showAdminModal('Gagal Rilis', error.message || 'Terjadi kesalahan saat merilis jadwal.', 'error');
+                console.error(error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Rilis Jadwal Sekarang';
+            }
+        }
+
+        window.onload = muatDropdownBankSoal;
+    </script>
+</body>
+</html>

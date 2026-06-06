@@ -162,7 +162,7 @@
         }
     </style>
 </head>
-<body class="p-4 md:p-8" oncontextmenu="return false;">
+<body class="min-h-screen p-4 md:p-8" oncontextmenu="return false;">
 
     <div id="studentModal" class="hide fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md transition-opacity student-modal-bg">
         <div class="bg-white rounded-3xl max-w-sm w-full p-8 modal-masuk student-modal-box">
@@ -190,7 +190,7 @@
         </div>
     </div>
 
-    <div class="max-w-4xl mx-auto space-y-6 pb-4">
+    <div class="max-w-4xl mx-auto px-4 md:px-8 space-y-6 pb-4 min-h-screen">
         
         <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6 mb-6">
             <div class="flex items-center gap-4">
@@ -200,7 +200,7 @@
                     <p class="text-sm md:text-base text-slate-500">SMKN 1 Banjarmasin</p>
                 </div>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                 <div id="syncStatus" class="hide bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full font-bold text-sm">Terkoneksi</div>
             </div>
         </header>
@@ -264,9 +264,9 @@
             
             <div id="opsiJawaban" class="space-y-3 mb-8"></div>
 
-            <div class="flex justify-between items-center gap-2 border-t pt-6">
-                <button onclick="gantiSoal(-1)" class="px-6 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition">Sebelumnya</button>
-                <button id="btnNextSelesai" onclick="gantiSoal(1)" class="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/30 transition">Selanjutnya</button>
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-3 border-t pt-6">
+                <button onclick="gantiSoal(-1)" class="w-full sm:w-auto px-6 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition">Sebelumnya</button>
+                <button id="btnNextSelesai" onclick="gantiSoal(1)" class="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/30 transition">Selanjutnya</button>
             </div>
         </div>
 
@@ -345,12 +345,14 @@
 
             try {
                 console.log("Mencari data siswa dengan NIS:", nis);
-                const { data: siswa, error: errSiswa } = await sb.from('data_siswa').select('*').eq('nis', nis).single();
-                
+                const { data: siswa, error: errSiswa } = await sb.from('siswa').select('nis,nama,jurusan,tingkat,rombel').eq('nis', nis).single();
+
                 if (errSiswa || !siswa) throw new Error("Nomor Induk Siswa (NIS) tidak terdaftar di sistem.");
-                
+
+                // standar internal: gabungkan tingkat + rombel menjadi properti kelas
+                siswa.kelas = `${siswa.tingkat} ${siswa.rombel}`.trim();
                 dataSiswaAktif = siswa;
-                
+
                 document.getElementById('studentNis').textContent = siswa.nis;
                 document.getElementById('studentName').textContent = siswa.nama;
                 document.getElementById('studentJurusan').textContent = siswa.jurusan;
@@ -376,58 +378,113 @@
             document.getElementById('btnCariSiswa').textContent = "Cek Data Siswa";
             document.getElementById('btnCariSiswa').disabled = false;
             document.getElementById('studentInfoCard').classList.add('hide');
+            document.getElementById('scheduleCard').classList.add('hide');
+        }
+
+        function showWaitingRoomCard(message) {
+            document.getElementById('studentInfoCard').classList.add('hide');
+            document.getElementById('scheduleCard').classList.remove('hide');
+            document.getElementById('scheduleMapel').textContent = '-';
+            document.getElementById('scheduleGuru').textContent = '-';
+            document.getElementById('scheduleTanggal').textContent = '-';
+            document.getElementById('scheduleWaktu').textContent = '-';
+            document.getElementById('scheduleStatusText').innerHTML = `<span class="text-slate-500">${message}</span>`;
+            const btn = document.getElementById('btnStartExam');
+            btn.disabled = true;
+            btn.className = "w-full bg-slate-200 text-slate-500 rounded-xl px-8 py-4 font-bold text-lg cursor-not-allowed";
+            btn.textContent = "Menunggu Jadwal Ujian";
         }
 
         // --- ALUR 2: BUKA JADWAL (RUANG TUNGGU) ---
         async function bukaRuangTunggu() {
-            document.getElementById('studentInfoCard').classList.add('hide');
+            showWaitingRoomCard('Memeriksa jadwal ujian...');
             
             try {
-                const hariIni = new Date().toISOString().split('T')[0];
+                // gunakan tanggal hari ini menurut zona Asia/Makassar (WITA)
+                const hariIni = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
 
+                const normalizeValue = (value) => String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+                const targetJurusan = normalizeValue(dataSiswaAktif.jurusan);
+                const targetKelas = normalizeValue(dataSiswaAktif.kelas);
+
+                console.log('Mencari jadwal untuk:', { hariIni, jurusan: dataSiswaAktif.jurusan, kelas: dataSiswaAktif.kelas });
                 const { data: jadwal, error: errJadwal } = await sb.from('jadwal_ujian')
                     .select('*, bank_soal(*)')
                     .eq('tanggal', hariIni)
-                    .contains('jurusan', [dataSiswaAktif.jurusan])
-                    .contains('kelas', [dataSiswaAktif.kelas]);
+                    .limit(500);
 
-                if (errJadwal || !jadwal || jadwal.length === 0) {
-                    throw new Error(`Belum ada jadwal ujian untuk Jurusan <b>${dataSiswaAktif.jurusan}</b> Kelas <b>${dataSiswaAktif.kelas}</b> pada hari ini.`);
+                console.log('Hasil query jadwal:', { jadwal, errJadwal });
+
+                const matchingSchedules = (jadwal || []).filter(item => {
+                    const hasJurusan = Array.isArray(item.jurusan) && item.jurusan.some(j => normalizeValue(j) === targetJurusan);
+                    const hasKelas = Array.isArray(item.kelas) && item.kelas.some(k => normalizeValue(k) === targetKelas);
+                    return hasJurusan && hasKelas;
+                });
+
+                if (errJadwal || matchingSchedules.length === 0) {
+                    showWaitingRoomCard(`Belum ada jadwal ujian untuk Jurusan <b>${dataSiswaAktif.jurusan}</b> Kelas <b>${dataSiswaAktif.kelas}</b> pada hari ini.`);
+                    return;
                 }
-                
-                jadwalAktif = jadwal[0];
+
+                jadwalAktif = matchingSchedules[0];
                 bankSoal = jadwalAktif.bank_soal.soal; 
 
                 document.getElementById('scheduleMapel').textContent = jadwalAktif.nama_mapel;
                 document.getElementById('scheduleGuru').textContent = jadwalAktif.nama_pengajar || '-';
                 document.getElementById('scheduleTanggal').textContent = jadwalAktif.tanggal;
                 document.getElementById('scheduleWaktu').textContent = `${jadwalAktif.jam_mulai.substring(0,5)} s/d ${jadwalAktif.jam_selesai.substring(0,5)} WITA`;
+                document.getElementById('scheduleStatusText').innerHTML = `<span class="text-slate-500">Ruang tunggu aktif. Tunggu mulai ujian.</span>`;
 
-                document.getElementById('scheduleCard').classList.remove('hide');
+                const btn = document.getElementById('btnStartExam');
+                btn.textContent = "Memuat Waktu...";
+                btn.className = "w-full bg-slate-300 text-slate-500 rounded-xl px-8 py-4 font-bold text-lg transition";
+                btn.disabled = true;
 
                 timerCekWaktu = setInterval(updateStatusTombolMulai, 1000);
                 updateStatusTombolMulai(); 
 
             } catch (error) {
-                showStudentModal("Informasi Jadwal", error.message, "info");
-                batalLogin(); 
+                showWaitingRoomCard(error.message || 'Terjadi kesalahan saat memuat jadwal. Silakan coba lagi.');
+                console.error(error);
             }
         }
 
         // --- ALUR 3: KUNCI WAKTU (REAL-TIME) ---
-        function updateStatusTombolMulai() {
-            const now = new Date();
-            const waktuSekarang = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0');
+        function parseTimeToMinutes(timeStr) {
+            const clean = String(timeStr || '').trim().slice(0,5);
+            const [hours, minutes] = clean.split(':').map(v => Number(v));
+            if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+            return hours * 60 + minutes;
+        }
 
+        function updateStatusTombolMulai() {
+            if (!jadwalAktif) return;
+
+            // hitung waktu saat ini dalam zona Asia/Makassar (WITA, UTC+8)
+            const targetOffset = -8 * 60; // minutes offset for UTC+8 in getTimezoneOffset convention
+            const localOffset = new Date().getTimezoneOffset();
+            const now = new Date(Date.now() + (localOffset - targetOffset) * 60000);
+            const waktuSekarang = now.getHours() * 60 + now.getMinutes();
+
+            const jamMulaiMenit = parseTimeToMinutes(jadwalAktif.jam_mulai);
+            const jamSelesaiMenit = parseTimeToMinutes(jadwalAktif.jam_selesai);
             const btn = document.getElementById('btnStartExam');
             const statusText = document.getElementById('scheduleStatusText');
 
-            if (waktuSekarang < jadwalAktif.jam_mulai) {
+            if (jamMulaiMenit === null || jamSelesaiMenit === null) {
+                btn.disabled = true;
+                btn.className = "w-full bg-slate-200 text-slate-500 rounded-xl px-8 py-4 font-bold text-lg cursor-not-allowed";
+                btn.textContent = "JADWAL TIDAK VALID";
+                statusText.innerHTML = `<span class="text-red-500 font-bold bg-red-50 px-3 py-1 rounded-md">⚠️ Jam mulai/selesai tidak ditemukan.</span>`;
+                return;
+            }
+
+            if (waktuSekarang < jamMulaiMenit) {
                 btn.disabled = true;
                 btn.className = "w-full bg-slate-200 text-slate-500 rounded-xl px-8 py-4 font-bold text-lg cursor-not-allowed";
                 btn.textContent = "UJIAN BELUM DIMULAI";
                 statusText.innerHTML = `<span class="text-orange-500 font-bold bg-orange-50 px-3 py-1 rounded-md">⏳ Menunggu Jam Ujian...</span>`;
-            } else if (waktuSekarang > jadwalAktif.jam_selesai) {
+            } else if (waktuSekarang >= jamSelesaiMenit) {
                 btn.disabled = true;
                 btn.className = "w-full bg-red-100 text-red-500 rounded-xl px-8 py-4 font-bold text-lg cursor-not-allowed";
                 btn.textContent = "WAKTU UJIAN TELAH BERAKHIR";
@@ -448,12 +505,15 @@
             
             try {
                 const { error: errHasil } = await sb.from('hasil_ujian').upsert({
-                    id_jadwal: jadwalAktif.id,
-                    nis_siswa: dataSiswaAktif.nis,
-                    nama_siswa: dataSiswaAktif.nama,
-                    kelas_siswa: dataSiswaAktif.kelas,
-                    nama_mapel: jadwalAktif.nama_mapel
-                }, { onConflict: 'id_jadwal, nis_siswa', ignoreDuplicates: true });
+                    jadwal_id: jadwalAktif.id,
+                    bank_soal_id: jadwalAktif.bank_soal_id,
+                    nis: dataSiswaAktif.nis,
+                    siswa_nama: dataSiswaAktif.nama,
+                    jurusan: dataSiswaAktif.jurusan,
+                    tingkat: dataSiswaAktif.tingkat,
+                    rombel: dataSiswaAktif.rombel,
+                    total_soal: bankSoal.length
+                }, { onConflict: 'jadwal_id,nis', ignoreDuplicates: true });
 
                 if (errHasil) throw new Error("Gagal menginisialisasi sesi ujian di database.");
 
@@ -522,9 +582,9 @@
             sync.className = "text-yellow-700 bg-yellow-100 px-4 py-2 rounded-full font-bold text-sm block";
 
             await sb.from('hasil_ujian')
-                .update({ detail_jawaban: jawabanSiswa })
-                .eq('id_jadwal', jadwalAktif.id)
-                .eq('nis_siswa', dataSiswaAktif.nis);
+                .update({ jawaban: jawabanSiswa })
+                .eq('jadwal_id', jadwalAktif.id)
+                .eq('nis', dataSiswaAktif.nis);
 
             sync.innerHTML = "✔ Tersimpan"; 
             sync.className = "text-emerald-700 bg-emerald-100 px-4 py-2 rounded-full font-bold text-sm block";
@@ -544,8 +604,8 @@
             let skorAkhir = Math.round((benar / bankSoal.length) * 100);
 
             await sb.from('hasil_ujian')
-                .update({ is_selesai: true, nilai_akhir: isNaN(skorAkhir) ? 0 : skorAkhir, cheat_count: cheatCount })
-                .eq('id_jadwal', jadwalAktif.id).eq('nis_siswa', dataSiswaAktif.nis);
+                .update({ is_selesai: true, skor: isNaN(skorAkhir) ? 0 : skorAkhir, total_soal: bankSoal.length })
+                .eq('jadwal_id', jadwalAktif.id).eq('nis', dataSiswaAktif.nis);
 
             const pesanNilai = `<div class="text-center">
                 <p class="text-slate-600 mb-4 text-sm font-medium tracking-wide uppercase">Ujian Selesai!</p>
@@ -596,7 +656,11 @@
         document.addEventListener("visibilitychange", () => {
             if (document.hidden && jadwalAktif && !document.getElementById('examCard').classList.contains('hide')) {
                 cheatCount++;
-                sb.from('hasil_ujian').update({ cheat_count: cheatCount }).eq('id_jadwal', jadwalAktif.id).eq('nis_siswa', dataSiswaAktif.nis);
+                sb.from('hasil_ujian').update({})
+                    .eq('jadwal_id', jadwalAktif.id)
+                    .eq('nis', dataSiswaAktif.nis)
+                    .then(() => {})
+                    .catch(() => {});
                 alert("PELANGGARAN: Sistem mencatat Anda terdeteksi keluar dari layar ujian!");
             }
         });

@@ -163,6 +163,71 @@
         }
 
         /* =========================================
+           NAVIGASI SOAL SIDEBAR
+        ========================================= */
+        .navigasi-soal-wrapper {
+            position: fixed;
+            top: 0;
+            right: -340px;
+            width: 340px;
+            height: 100vh;
+            background: #ffffff;
+            border-left: 2px solid #e2e8f0;
+            padding: 24px;
+            box-shadow: -10px 0 40px rgba(0,0,0,0.1);
+            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .navigasi-soal-wrapper.open {
+            right: 0;
+        }
+
+        .navigasi-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .navigasi-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .navigasi-header-sidebar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .navigasi-soal-title {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .navigasi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+            gap: 10px;
+        }
+
+        /* =========================================
            STUDENT INFO CARD (same wrapper)
         ========================================= */
         .info-grid {
@@ -631,9 +696,39 @@
             cursor: default;
             user-select: none;
         }
+        /* responsive mobile */
+        @media (max-width: 600px) {
+            body { padding: 12px; }
+            .login-card { padding: 28px 20px 24px; border-radius: 20px; }
+            .info-grid, .schedule-grid { grid-template-columns: 1fr; gap: 12px; }
+            .full-col { grid-column: span 1; }
+            .exam-header { flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+            .exam-header > div:first-child { text-align: center !important; width: 100%; }
+            .exam-header > div:last-child { justify-content: center; width: 100%; }
+            .exam-footer { gap: 10px; }
+            .nomor-soal-box { padding: 8px 14px; }
+            .navigasi-grid { grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); }
+            .btn-nav-soal { font-size: 0.85rem; }
+            .opsi-item { padding: 12px; }
+            .portal-title { font-size: 1.6rem; }
+            .logo-wrapper { width: 80px; height: 80px; margin-bottom: 20px; }
+            .navigasi-soal-wrapper { width: 280px; right: -280px; padding: 20px; }
+        }
     </style>
 </head>
 <body oncontextmenu="return false;">
+
+    <!-- ===== OVERLAY NAVIGASI ===== -->
+    <div id="navigasiOverlay" class="navigasi-overlay" onclick="toggleNavigasi()"></div>
+
+    <!-- ===== SIDEBAR NAVIGASI ===== -->
+    <div id="navigasiWrapper" class="navigasi-soal-wrapper">
+        <div class="navigasi-header-sidebar">
+            <div class="navigasi-soal-title">Navigasi Soal</div>
+            <button onclick="toggleNavigasi()" style="background: none; border: none; font-size: 1.5rem; color: #64748b; cursor: pointer; line-height: 1;">&times;</button>
+        </div>
+        <div id="navigasiSoalGrid" class="navigasi-grid"></div>
+    </div>
 
     <!-- ===== MODAL NOTIFIKASI ===== -->
     <div id="studentModal" class="hide modal-overlay">
@@ -756,16 +851,14 @@
                         <div class="nomor-soal-label">Soal</div>
                         <div class="nomor-soal-num" id="nomorSoalDisplay">1</div>
                     </div>
+                    <button onclick="toggleNavigasi()" class="nomor-soal-box" style="cursor: pointer; background: #eff6ff; border-color: #bfdbfe; display: flex; align-items: center; justify-content: center; padding: 0 16px; transition: all 0.2s;">
+                        <span style="font-size: 1.4rem; color: #2563eb;">☰</span>
+                    </button>
                 </div>
             </div>
 
             <p id="teksSoal" class="teks-soal"></p>
             <div id="opsiJawaban"></div>
-
-            <div class="navigasi-soal-wrapper">
-                <div class="navigasi-soal-title">Navigasi Soal</div>
-                <div id="navigasiSoalGrid" class="navigasi-grid"></div>
-            </div>
 
             <div class="exam-footer">
                 <button onclick="gantiSoal(-1)" class="btn-prev">← Sebelumnya</button>
@@ -987,8 +1080,7 @@
                     clearInterval(examTimerInterval);
                     sisaWaktuDetik = 0;
                     updateTimerDisplay();
-                    alert("WAKTU HABIS! Ujian Anda akan dikumpulkan secara otomatis.");
-                    selesaiUjian();
+                    selesaiUjian(true);
                 } else {
                     updateTimerDisplay();
                 }
@@ -1061,9 +1153,15 @@
                 btn.textContent = i + 1;
                 btn.onclick = () => {
                     tampilkanSoal(i);
+                    if (window.innerWidth <= 600) toggleNavigasi();
                 };
                 grid.appendChild(btn);
             }
+        }
+
+        function toggleNavigasi() {
+            document.getElementById('navigasiWrapper').classList.toggle('open');
+            document.getElementById('navigasiOverlay').classList.toggle('open');
         }
 
         function pilihJawaban(index, jawaban, el) {
@@ -1092,7 +1190,7 @@
             );
         }
 
-        async function selesaiUjian() {
+        async function selesaiUjian(isAutoSubmit = false) {
             try {
                 clearInterval(examTimerInterval);
                 const benar = jawabanSiswa.filter((j, i) => j && j.toLowerCase() === soalList[i].jawaban.toLowerCase()).length;
@@ -1123,7 +1221,13 @@
                     await sb.from('hasil_ujian').insert([payload]);
                 }
 
-                showStudentModal("🎉 Berhasil Disimpan", `Jawaban benar: <strong>${benar}</strong> dari <strong>${total_soal}</strong>`, "success");
+                const title = isAutoSubmit ? "⏰ Waktu Habis" : "🎉 Berhasil Disimpan";
+                const msg = isAutoSubmit 
+                    ? `Waktu ujian telah habis dan jawaban Anda disubmit otomatis.<br><br>Jawaban benar: <strong>${benar}</strong> dari <strong>${total_soal}</strong>`
+                    : `Jawaban benar: <strong>${benar}</strong> dari <strong>${total_soal}</strong>`;
+                const type = isAutoSubmit ? "warning" : "success";
+
+                showStudentModal(title, msg, type);
                 document.getElementById('modalButtons').innerHTML =
                     `<button onclick="window.location.reload()" class="modal-btn-success-full">Tutup Ujian</button>`;
             } catch (err) {
@@ -1167,8 +1271,7 @@
         document.addEventListener("visibilitychange", () => {
             if (document.hidden && jadwalAktif && !document.getElementById('examCard').classList.contains('hide')) {
                 cheatCount++;
-                // Note: cheat_count was removed from schema, we just alert for now or implement another tracking mechanism.
-                alert("PELANGGARAN: Anda terdeteksi keluar dari layar ujian!");
+                showStudentModal("⚠️ Peringatan Pelanggaran", "Anda terdeteksi membuka tab lain atau keluar dari layar ujian. Harap fokus pada ujian Anda!", "error");
             }
         });
 

@@ -400,17 +400,19 @@
         }
 
         .opsi-item:hover {
-            background: #eff6ff;
-            border-color: #93c5fd;
+            border-color: #cbd5e1;
+            background: #f1f5f9;
         }
 
         .opsi-item.selected {
+            border-color: #2563eb;
             background: #eff6ff;
-            border-color: #3b82f6;
-            color: #1d4ed8;
         }
 
         .opsi-huruf {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             width: 28px;
             height: 28px;
             min-width: 28px;
@@ -735,6 +737,7 @@
                 </div>
             </div>
             <button onclick="masukKeUjian()" id="btnStartExam" class="btn-mulai" disabled>Memuat Waktu...</button>
+            <button onclick="batalLogin()" class="btn-bukan" style="width: 100%; margin-top: 12px;">← Kembali ke Awal</button>
         </div>
 
         <!-- ===== STEP 4: SOAL UJIAN ===== -->
@@ -744,18 +747,32 @@
                     <div class="exam-mapel" id="examMapelTitle">Mapel</div>
                     <span class="exam-siswa-badge" id="examStudentInfo">Nama - Kelas</span>
                 </div>
-                <div class="nomor-soal-box">
-                    <div class="nomor-soal-label">Soal</div>
-                    <div class="nomor-soal-num" id="nomorSoalDisplay">1</div>
+                <div style="display: flex; gap: 10px;">
+                    <div class="nomor-soal-box" style="border-color: #fca5a5; background: #fef2f2;">
+                        <div class="nomor-soal-label" style="color: #ef4444;">Sisa Waktu</div>
+                        <div class="nomor-soal-num" id="timerDisplay" style="color: #dc2626; font-size: 1.4rem;">00:00</div>
+                    </div>
+                    <div class="nomor-soal-box">
+                        <div class="nomor-soal-label">Soal</div>
+                        <div class="nomor-soal-num" id="nomorSoalDisplay">1</div>
+                    </div>
                 </div>
             </div>
 
             <p id="teksSoal" class="teks-soal"></p>
             <div id="opsiJawaban"></div>
 
+            <div class="navigasi-soal-wrapper">
+                <div class="navigasi-soal-title">Navigasi Soal</div>
+                <div id="navigasiSoalGrid" class="navigasi-grid"></div>
+            </div>
+
             <div class="exam-footer">
                 <button onclick="gantiSoal(-1)" class="btn-prev">← Sebelumnya</button>
                 <button id="btnNextSelesai" onclick="gantiSoal(1)" class="btn-next">Selanjutnya →</button>
+            </div>
+            <div style="margin-top: 12px;">
+                <button onclick="kembaliKePortal()" class="btn-bukan" style="width: 100%;">← Kembali ke Portal</button>
             </div>
         </div>
 
@@ -775,6 +792,8 @@
         let cheatCount     = 0;
         let soalList       = [];
         let jawabanSiswa   = [];
+        let examTimerInterval = null;
+        let sisaWaktuDetik = 0;
 
         /* ---- MODAL ---- */
         function showStudentModal(title, msg, type = 'info', isConfirm = false, onConfirm = null) {
@@ -835,9 +854,14 @@
         }
 
         function batalLogin() {
+            clearInterval(examTimerInterval);
             dataSiswaAktif = null;
+            jadwalAktif = null;
             document.getElementById('nisInput').value = '';
-            hide('studentInfoCard'); show('nisCard');
+            hide('studentInfoCard');
+            hide('scheduleCard');
+            hide('examCard');
+            show('nisCard');
         }
 
         /* ---- RUANG TUNGGU ---- */
@@ -922,7 +946,7 @@
         /* ---- UJIAN ---- */
         async function masukKeUjian() {
             try {
-                const { data, error } = await sb.from('bank_soal').select('soal')
+                const { data, error } = await sb.from('bank_soal').select('soal, durasi_menit')
                     .eq('id', jadwalAktif.bank_soal_id)
                     .maybeSingle();
 
@@ -931,13 +955,57 @@
                     showStudentModal("⚠️ Soal Tidak Ada", "Soal belum diunggah oleh guru.", "warning"); return;
                 }
 
-                soalList     = data.soal;
+                soalList = data.soal;
+                
+                // Shuffle soal (Fisher-Yates)
+                for (let i = soalList.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [soalList[i], soalList[j]] = [soalList[j], soalList[i]];
+                }
+                
                 jawabanSiswa = new Array(soalList.length).fill(null);
+                
+                // Mulai Timer
+                const durasi = data.durasi_menit || 90;
+                mulaiTimerUjian(durasi);
+                
                 hide('scheduleCard'); show('examCard');
                 tampilkanSoal(0);
             } catch (err) {
                 showStudentModal("❌ Kesalahan", err.message, "error");
             }
+        }
+
+        function mulaiTimerUjian(durasiMenit) {
+            clearInterval(examTimerInterval);
+            sisaWaktuDetik = durasiMenit * 60;
+            updateTimerDisplay();
+
+            examTimerInterval = setInterval(() => {
+                sisaWaktuDetik--;
+                if (sisaWaktuDetik <= 0) {
+                    clearInterval(examTimerInterval);
+                    sisaWaktuDetik = 0;
+                    updateTimerDisplay();
+                    alert("WAKTU HABIS! Ujian Anda akan dikumpulkan secara otomatis.");
+                    selesaiUjian();
+                } else {
+                    updateTimerDisplay();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const jam = Math.floor(sisaWaktuDetik / 3600);
+            const sisaMnt = sisaWaktuDetik % 3600;
+            const mnt = Math.floor(sisaMnt / 60);
+            const dtk = sisaMnt % 60;
+            
+            const fmt = (n) => n.toString().padStart(2, '0');
+            const display = jam > 0 ? `${fmt(jam)}:${fmt(mnt)}:${fmt(dtk)}` : `${fmt(mnt)}:${fmt(dtk)}`;
+            
+            const timerEl = document.getElementById('timerDisplay');
+            if (timerEl) timerEl.textContent = display;
         }
 
         function tampilkanSoal(index) {
@@ -946,7 +1014,7 @@
 
             document.getElementById('examMapelTitle').textContent = jadwalAktif.nama_mapel;
             document.getElementById('examStudentInfo').textContent = `${dataSiswaAktif.nama} — ${dataSiswaAktif.tingkat||''} ${dataSiswaAktif.rombel||''}`.trim();
-            document.getElementById('nomorSoalDisplay').textContent = soal.id;
+            document.getElementById('nomorSoalDisplay').textContent = index + 1;
             document.getElementById('teksSoal').textContent = soal.text;
 
             const opsiEl = document.getElementById('opsiJawaban');
@@ -977,12 +1045,32 @@
 
             document.getElementById('btnNextSelesai').textContent =
                 index === soalList.length - 1 ? 'Selesai ✓' : 'Selanjutnya →';
+                
+            renderNavigasiSoal(index);
+        }
+
+        function renderNavigasiSoal(currentIndex) {
+            const grid = document.getElementById('navigasiSoalGrid');
+            grid.innerHTML = '';
+            for (let i = 0; i < soalList.length; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'btn-nav-soal';
+                if (jawabanSiswa[i] !== null) btn.classList.add('answered');
+                if (i === currentIndex) btn.classList.add('active');
+                
+                btn.textContent = i + 1;
+                btn.onclick = () => {
+                    tampilkanSoal(i);
+                };
+                grid.appendChild(btn);
+            }
         }
 
         function pilihJawaban(index, jawaban, el) {
             jawabanSiswa[index] = jawaban;
             document.querySelectorAll('#opsiJawaban .opsi-item').forEach(d => d.classList.remove('selected'));
             el.classList.add('selected');
+            renderNavigasiSoal(index);
         }
 
         function gantiSoal(arah) {
@@ -992,8 +1080,21 @@
             tampilkanSoal(next);
         }
 
+        function kembaliKePortal() {
+            showStudentModal(
+                "Kembali ke Portal?", 
+                "Apakah Anda yakin ingin keluar dari halaman soal? Jawaban Anda akan di-reset karena Anda keluar sepenuhnya dari sesi ujian.", 
+                "warning", 
+                true, 
+                () => {
+                    batalLogin();
+                }
+            );
+        }
+
         async function selesaiUjian() {
             try {
+                clearInterval(examTimerInterval);
                 const benar = jawabanSiswa.filter((j, i) => j && j.toLowerCase() === soalList[i].jawaban.toLowerCase()).length;
                 const total_soal = soalList.length;
                 const skor = Math.round((benar / total_soal) * 100);

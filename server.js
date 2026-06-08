@@ -44,7 +44,7 @@ app.use(express.json());
 app.use('/audio', express.static(AUDIO_DIR));
 
 // 2. Sajikan file frontend secara statis agar terhindar dari isu CORS
-const FRONTEND_DIR = path.join(__dirname, '../frontend');
+const FRONTEND_DIR = __dirname;
 app.use('/', express.static(FRONTEND_DIR));
 
 // URL Web App Apps Script Anda yang baru

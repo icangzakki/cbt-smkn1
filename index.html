@@ -844,20 +844,34 @@
         async function bukaRuangTunggu() {
             try {
                 const kelasValue = `${dataSiswaAktif.tingkat||''} ${dataSiswaAktif.rombel||''}`.trim();
-                const today      = new Date().toISOString().split('T')[0];
+                
+                // Use local timezone for 'today' (YYYY-MM-DD)
+                const d = new Date();
+                const today = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 
+                // Fetch schedules for today
                 const { data, error } = await sb.from('jadwal_ujian').select('*')
-                    .eq('tanggal', today)
-                    .contains('jurusan', [dataSiswaAktif.jurusan])
-                    .contains('kelas',   [kelasValue]);
+                    .eq('tanggal', today);
 
                 if (error) { showStudentModal("❌ Kesalahan", error.message, "error"); return; }
-                if (!data || data.length === 0) {
-                    showStudentModal("⏳ Jadwal Belum Ada", `Jadwal ujian untuk <strong>${kelasValue}</strong> belum dirilis oleh guru.`, "info");
+                
+                // Filter manually to handle case insensitivity
+                const jadwalCocok = (data || []).filter(j => {
+                    const sJurusan = (dataSiswaAktif.jurusan || '').toLowerCase().trim();
+                    const sKelas = kelasValue.toLowerCase();
+                    
+                    const jJurusan = (j.jurusan || []).map(x => String(x).toLowerCase().trim());
+                    const jKelas = (j.kelas || []).map(x => String(x).toLowerCase().trim());
+                    
+                    return jJurusan.includes(sJurusan) && jKelas.includes(sKelas);
+                });
+
+                if (jadwalCocok.length === 0) {
+                    showStudentModal("⏳ Jadwal Belum Ada", `Jadwal ujian untuk <strong>${kelasValue}</strong> belum dirilis oleh guru pada tanggal ini.`, "info");
                     batalLogin(); return;
                 }
 
-                jadwalAktif = data[0];
+                jadwalAktif = jadwalCocok[0];
                 tampilkanRuangTunggu();
             } catch (err) {
                 showStudentModal("❌ Kesalahan", err.message, "error");
@@ -908,16 +922,16 @@
         /* ---- UJIAN ---- */
         async function masukKeUjian() {
             try {
-                const { data, error } = await sb.from('soal_ujian').select('*')
-                    .eq('jadwal_id', jadwalAktif.id)
-                    .order('nomor_soal', { ascending: true });
+                const { data, error } = await sb.from('bank_soal').select('soal')
+                    .eq('id', jadwalAktif.bank_soal_id)
+                    .maybeSingle();
 
                 if (error) { showStudentModal("❌ Kesalahan", error.message, "error"); return; }
-                if (!data || data.length === 0) {
+                if (!data || !data.soal || data.soal.length === 0) {
                     showStudentModal("⚠️ Soal Tidak Ada", "Soal belum diunggah oleh guru.", "warning"); return;
                 }
 
-                soalList     = data;
+                soalList     = data.soal;
                 jawabanSiswa = new Array(soalList.length).fill(null);
                 hide('scheduleCard'); show('examCard');
                 tampilkanSoal(0);
@@ -932,31 +946,34 @@
 
             document.getElementById('examMapelTitle').textContent = jadwalAktif.nama_mapel;
             document.getElementById('examStudentInfo').textContent = `${dataSiswaAktif.nama} — ${dataSiswaAktif.tingkat||''} ${dataSiswaAktif.rombel||''}`.trim();
-            document.getElementById('nomorSoalDisplay').textContent = soal.nomor_soal;
-            document.getElementById('teksSoal').textContent = soal.teks_soal;
+            document.getElementById('nomorSoalDisplay').textContent = soal.id;
+            document.getElementById('teksSoal').textContent = soal.text;
 
             const opsiEl = document.getElementById('opsiJawaban');
             opsiEl.innerHTML = '';
 
-            ['a','b','c','d','e'].forEach(o => {
-                const label = soal[`opsi_${o}`];
-                if (!label) return;
+            const hurufOptions = ['a','b','c','d','e'];
+            if (soal.opsi && Array.isArray(soal.opsi)) {
+                soal.opsi.forEach((label, idx) => {
+                    if (!label) return;
+                    const o = hurufOptions[idx];
 
-                const div = document.createElement('div');
-                div.className = 'opsi-item' + (jawabanSiswa[index] === o ? ' selected' : '');
+                    const div = document.createElement('div');
+                    div.className = 'opsi-item' + (jawabanSiswa[index] === o ? ' selected' : '');
 
-                const huruf = document.createElement('span');
-                huruf.className = 'opsi-huruf';
-                huruf.textContent = o.toUpperCase();
+                    const huruf = document.createElement('span');
+                    huruf.className = 'opsi-huruf';
+                    huruf.textContent = o.toUpperCase();
 
-                const teks = document.createElement('span');
-                teks.textContent = label;
+                    const teks = document.createElement('span');
+                    teks.textContent = label;
 
-                div.appendChild(huruf);
-                div.appendChild(teks);
-                div.onclick = () => pilihJawaban(index, o, div);
-                opsiEl.appendChild(div);
-            });
+                    div.appendChild(huruf);
+                    div.appendChild(teks);
+                    div.onclick = () => pilihJawaban(index, o, div);
+                    opsiEl.appendChild(div);
+                });
+            }
 
             document.getElementById('btnNextSelesai').textContent =
                 index === soalList.length - 1 ? 'Selesai ✓' : 'Selanjutnya →';
@@ -977,17 +994,35 @@
 
         async function selesaiUjian() {
             try {
+                const benar = jawabanSiswa.filter((j, i) => j && j.toLowerCase() === soalList[i].jawaban.toLowerCase()).length;
+                const total_soal = soalList.length;
+                const skor = Math.round((benar / total_soal) * 100);
+
+                const payload = {
+                    jadwal_id: jadwalAktif.id,
+                    bank_soal_id: jadwalAktif.bank_soal_id,
+                    nis: dataSiswaAktif.nis,
+                    siswa_nama: dataSiswaAktif.nama,
+                    jurusan: dataSiswaAktif.jurusan,
+                    tingkat: dataSiswaAktif.tingkat,
+                    rombel: dataSiswaAktif.rombel,
+                    jawaban: jawabanSiswa,
+                    skor: skor,
+                    total_soal: total_soal,
+                    is_selesai: true,
+                    waktu_submit: new Date().toISOString()
+                };
+
                 const { data: existing } = await sb.from('hasil_ujian').select('id')
                     .eq('jadwal_id', jadwalAktif.id).eq('nis', dataSiswaAktif.nis).maybeSingle();
 
                 if (existing) {
-                    await sb.from('hasil_ujian').update({ jawaban: jawabanSiswa, waktu_submit: new Date().toISOString() }).eq('id', existing.id);
+                    await sb.from('hasil_ujian').update(payload).eq('id', existing.id);
                 } else {
-                    await sb.from('hasil_ujian').insert([{ jadwal_id: jadwalAktif.id, nis: dataSiswaAktif.nis, jawaban: jawabanSiswa, cheat_count: cheatCount, waktu_submit: new Date().toISOString() }]);
+                    await sb.from('hasil_ujian').insert([payload]);
                 }
 
-                const benar = jawabanSiswa.filter((j, i) => j === soalList[i].kunci_jawaban).length;
-                showStudentModal("🎉 Berhasil Disimpan", `Jawaban benar: <strong>${benar}</strong> dari <strong>${soalList.length}</strong>`, "success");
+                showStudentModal("🎉 Berhasil Disimpan", `Jawaban benar: <strong>${benar}</strong> dari <strong>${total_soal}</strong>`, "success");
                 document.getElementById('modalButtons').innerHTML =
                     `<button onclick="window.location.reload()" class="modal-btn-success-full">Tutup Ujian</button>`;
             } catch (err) {
@@ -1031,10 +1066,7 @@
         document.addEventListener("visibilitychange", () => {
             if (document.hidden && jadwalAktif && !document.getElementById('examCard').classList.contains('hide')) {
                 cheatCount++;
-                sb.from('hasil_ujian').update({ cheat_count: cheatCount })
-                    .eq('jadwal_id', jadwalAktif.id).eq('nis', dataSiswaAktif.nis)
-                    .then(({ error }) => { if (error) console.warn('cheat_count error:', error); })
-                    .catch(console.error);
+                // Note: cheat_count was removed from schema, we just alert for now or implement another tracking mechanism.
                 alert("PELANGGARAN: Anda terdeteksi keluar dari layar ujian!");
             }
         });

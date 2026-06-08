@@ -227,6 +227,56 @@
             gap: 10px;
         }
 
+        .btn-nav-soal {
+            width: 100%;
+            aspect-ratio: 1;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 800;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            box-shadow: 0 2px 0 #cbd5e1;
+        }
+
+        .btn-nav-soal:hover {
+            background: #f1f5f9;
+            transform: translateY(1px);
+            box-shadow: 0 1px 0 #cbd5e1;
+        }
+
+        .btn-nav-soal.answered {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border-color: #1d4ed8;
+            color: #ffffff;
+            box-shadow: 0 2px 0 #1e40af;
+        }
+        
+        .btn-nav-soal.answered:hover {
+            transform: translateY(1px);
+            box-shadow: 0 1px 0 #1e40af;
+        }
+
+        .btn-nav-soal.active {
+            border: 2px solid #0f172a;
+            background: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 0 0 3px rgba(15,23,42,0.1), 0 3px 0 #0f172a;
+            transform: translateY(-2px);
+        }
+
+        .btn-nav-soal.answered.active {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            border-color: #1e3a8a;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.2), 0 3px 0 #1e3a8a;
+            color: #ffffff;
+        }
+
         /* =========================================
            STUDENT INFO CARD (same wrapper)
         ========================================= */
